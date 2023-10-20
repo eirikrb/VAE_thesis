@@ -25,9 +25,8 @@ def predict(model:nn.Module, dataloader:torch.utils.data.DataLoader, index:int):
 
 
 def plot_loss(training_loss, validation_loss, model_name, save=False):
-    
+    print('Plotting loss...')
     epochs = np.arange(len(training_loss))
-
     plt.figure(figsize=(15,15))
     plt.plot(epochs, training_loss, label='Training_loss')
     plt.plot(epochs, validation_loss, label='Validation loss')
@@ -53,6 +52,7 @@ def plot_reconstruction(index, X, X_hat, model_name, save=False):
         plt.show()
 
 def plot_reconstructions(model:nn.Module, dataloader:torch.utils.data.DataLoader, model_name_:str, device:str, num_examples:int=7, save=True):
+    print('Plotting reconstructions...')
     batches_to_sample_from = [i for i in range(num_examples)]
     for batch_idx, x_batch in enumerate(dataloader):
         x_batch = x_batch.to(device)
@@ -60,8 +60,6 @@ def plot_reconstructions(model:nn.Module, dataloader:torch.utils.data.DataLoader
         if batch_idx in batches_to_sample_from:
             x = x_batch.cpu().detach().numpy()[0,0,:]
             x_hat = x_hat.cpu().detach().numpy()[0,0,:]
-            print(x.shape)
-            print(x_hat.shape)
             plot_reconstruction(index=batch_idx, X=x, X_hat=x_hat, model_name=model_name_, save=True)
 
 

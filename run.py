@@ -13,7 +13,7 @@ from utils.plotting import plot_reconstructions, plot_loss
 
 # Hyper-params:
 LEARNING_RATE = 0.001
-N_EPOCH = 5
+N_EPOCH = 50
 BATCH_SIZE = 32     
 LATENT_DIMS = 12
 
@@ -91,14 +91,9 @@ def main():
     plot_reconstructions(model=vae, dataloader=dataloader_test, model_name_=model_name_, device=device, num_examples=7, save=True)
     plot_loss(training_loss, validation_loss, save=True, model_name=model_name_)
 
-    #create functions for plotting test error as function of beta (first check what b-VAE loss function looks like), latent dims, etc.
+    # TODO: create functions for plotting test error as function of beta (first check what b-VAE loss function looks like), latent dims, etc.
 
-            
-
-
-
-
-
+    
 
 if __name__ == '__main__':
     try:
