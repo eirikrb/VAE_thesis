@@ -27,7 +27,7 @@ def predict(model:nn.Module, dataloader:torch.utils.data.DataLoader, index:int):
 def plot_loss(training_loss, validation_loss, model_name, save=False):
     print('Plotting loss...')
     epochs = np.arange(len(training_loss))
-    plt.figure(figsize=(15,15))
+    plt.figure(figsize=(10,10))
     plt.plot(epochs, training_loss, label='Training_loss')
     plt.plot(epochs, validation_loss, label='Validation loss')
     plt.legend()
@@ -47,7 +47,7 @@ def plot_reconstruction(index, X, X_hat, model_name, save=False):
     ax.scatter(angles, X_hat, s=0.1, color='r')
     ax.legend(['True', 'Reconstructed'], loc='upper right')
     if save:
-        plt.savefig(f'plots/RECONSTRUCTION_{model_name}_{index}.png', bbox_inches='tight')
+        plt.savefig(f'plots/RECONSTRUCTION_{model_name}_{index}.png')
     else:
         plt.show()
 

@@ -5,7 +5,7 @@ import os
 import sys
 from vae.VAE import VAE
 from vae.encoders import Encoder_conv_shallow, Encoder_conv_deep
-from vae.decoders import Decoder_conv_shallow, Decoder_conv_deep
+from vae.decoders import Decoder_conv_shallow, Decoder_conv_deep, Decoder_circular_conv_shallow
 import torch.nn.functional as F
 from utils.dataloader import load_LiDARDataset
 from utils.plotting import plot_reconstructions, plot_loss
@@ -62,20 +62,22 @@ def main():
                                                                                     train_val_split=0.3,
                                                                                     shuffle=True,
                                                                                     extend_dataset_roll=True,
+                                                                                    roll_degrees=[20,-20],
                                                                                     add_noise_to_train=True)
 
     # Create vae model
     encoder = Encoder_conv_shallow(latent_dims=LATENT_DIMS)
+    #decoder = Decoder_circular_conv_shallow(latent_dims=LATENT_DIMS)
     decoder = Decoder_conv_shallow(latent_dims=LATENT_DIMS)
     vae = VAE(encoder=encoder, decoder=decoder, latent_dims=LATENT_DIMS).to(device)
     optimizer = Adam(vae.parameters(), lr=LEARNING_RATE)
 
-    model_name_ = f'{vae.encoder.name}_latent_dims_{LATENT_DIMS}'
-
+    #model_name_ = f'{vae.encoder.name}_latent_dims_{LATENT_DIMS}'
+    model_name_ = 'shallow_conv_nolinearlayer'
 
     # train+validate-loop
     training_loss = [] # maybe save to csv or something later so it can be compared to other configurations
-    validation_loss = []
+    validation_loss = [] # ^
     for e in range(N_EPOCH):
         train_loss = train(vae, dataloader_train, optimizer)
         val_loss = validation(vae, dataloader_val)

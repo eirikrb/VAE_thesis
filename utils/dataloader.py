@@ -37,15 +37,6 @@ class LiDARDataset(torch.utils.data.Dataset):
 
   def __getitem__(self, i):
     return self.X[i]
-  
-
-def extend_dataset_rolling(X:np.ndarray, roll:int=90):
-    '''
-    Extend the dataset by rolling the data by a number of steps (two degrees per one step).
-    '''
-    X_extended = X.copy()
-    X_extended = np.concatenate((X_extended, np.roll(X, roll, axis=1)), axis=0)
-    return X_extended
 
 
 def load_LiDARDataset(path_x:str, 
@@ -79,7 +70,7 @@ def load_LiDARDataset(path_x:str,
     X_train = X[:train_size,:]
 
     if add_noise_to_train:
-        X_train = X_train + np.random.normal(0, 0.007, size=X_train.shape)
+        X_train = X_train + np.random.normal(0, 0.007, size=X_train.shape) # Suitable noise variance found by plotting
     
     x_mean, x_std = X_train.mean(), X_train.std() # Mean and std only from training set
     
@@ -100,9 +91,6 @@ def load_LiDARDataset(path_x:str,
                                                  drop_last=True)
     # Test set
     X_test = X[-test_size:,:]
-
-    """if add_noise_to_train:
-        X_test = X_test + np.random.normal(0, 0.007, size=X_test.shape)"""
     data_test = LiDARDataset(X_test, x_mean, x_std, prev_steps=prev_steps)  
     dataloader_test = torch.utils.data.DataLoader(data_test,
                                                   batch_size=1, 
@@ -110,29 +98,7 @@ def load_LiDARDataset(path_x:str,
                                                   num_workers=1,
                                                   drop_last=True)
     
-
-
     return data_train, data_val, data_test, dataloader_train, dataloader_val, dataloader_test
-
-
-def calculate_total_risk(path_y:str, mode:str) -> np.ndarray:
-    # Y has a list of CRI at each row -> number of risks varies at each row -> read with predefined number of cols -> pandas
-    # Placeholder, can consider more sophisticated ways to calculate the total risk when more then one obstacle are present.
-
-    Y = pd.read_csv(path_y, delimiter=r"\s+", header=None, names=[i for i in range(8)]) # assume a maximum number of 5 obstacles at a time
-
-    if mode=='sum':
-        y = Y.sum(axis=1)
- 
-    elif mode == 'max':
-        y = Y.max(axis=1)
-
-    else:
-        y = np.mean(Y, axis=1)
-
-    y = y.to_numpy(copy=True)
-    return y
-
 
 def prev_timesteps_feature_enginering(X:np.ndarray, time_steps:int):
 
@@ -147,3 +113,11 @@ def prev_timesteps_feature_enginering(X:np.ndarray, time_steps:int):
     
     return X_concat
     
+
+def extend_dataset_rolling(X:np.ndarray, roll:int=90):
+    '''
+    Extend the dataset by rolling the data by a "roll" number of steps (two degrees per one step).
+    '''
+    X_extended = X.copy()
+    X_extended = np.concatenate((X_extended, np.roll(X, roll, axis=1)), axis=0)
+    return X_extended
