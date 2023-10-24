@@ -9,53 +9,22 @@ from vae.decoders import Decoder_conv_shallow, Decoder_conv_deep, Decoder_circul
 import torch.nn.functional as F
 from utils.dataloader import load_LiDARDataset
 from utils.plotting import plot_reconstructions, plot_loss
+from trainer import Trainer
 
 
-# Hyper-params:
+# HYPERPRAMETERS
 LEARNING_RATE = 0.001
-N_EPOCH = 50
+N_EPOCH = 2
 BATCH_SIZE = 32     
 LATENT_DIMS = 12
 
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
-def loss_function(x_hat, x, mu, log_var):
-    BCE_loss = F.binary_cross_entropy(x_hat, x, reduction='sum') # Reconstruction loss
-    KLD_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()) # KL divergence loss
-    return BCE_loss + KLD_loss
-
-
-def validation(model, dataloader_val):
-    model.eval()
-    val_loss = 0.0
-    with torch.no_grad():
-        for x in dataloader_val:
-            x = x.to(device)
-            x_hat, mu, log_var = model(x)
-            loss = loss_function(x_hat, x, mu, log_var)
-            val_loss += loss.item()
-    return val_loss/len(dataloader_val.dataset) # sjekk
-
-
-def train(model, dataloader_train, optimizer):
-    model.train()
-    train_loss = 0.0
-    for x_batch in dataloader_train:
-        x_batch = x_batch.to(device)
-        x_hat, mu, log_var = model(x_batch)
-        loss = loss_function(x_hat, x_batch, mu, log_var)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-    return train_loss/len(dataloader_train.dataset) #sjekk
-
-
 def main():
     
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    
     # Load data
-    path_x = 'data/LiDAR_MovingObstaclesNoRules.csv'
-    _, _, _, dataloader_train, dataloader_val, dataloader_test  = load_LiDARDataset(path_x,  
+    datapath = 'data/LiDAR_MovingObstaclesNoRules.csv'
+    _, _, _, dataloader_train, dataloader_val, dataloader_test  = load_LiDARDataset(datapath,  
                                                                                     mode='max', 
                                                                                     batch_size=16, 
                                                                                     train_test_split=0.7,
@@ -64,39 +33,49 @@ def main():
                                                                                     extend_dataset_roll=True,
                                                                                     roll_degrees=[20,-20],
                                                                                     add_noise_to_train=True)
-
-    # Create vae model
-    encoder = Encoder_conv_shallow(latent_dims=LATENT_DIMS)
-    #decoder = Decoder_circular_conv_shallow(latent_dims=LATENT_DIMS)
-    decoder = Decoder_conv_shallow(latent_dims=LATENT_DIMS)
+    
+    # Create Variational Autoencoder(s)
+    encoder = Encoder_conv_deep(latent_dims=LATENT_DIMS)
+    decoder = Decoder_conv_deep(latent_dims=LATENT_DIMS)
     vae = VAE(encoder=encoder, decoder=decoder, latent_dims=LATENT_DIMS).to(device)
     optimizer = Adam(vae.parameters(), lr=LEARNING_RATE)
-
-    #model_name_ = f'{vae.encoder.name}_latent_dims_{LATENT_DIMS}'
-    model_name_ = 'shallow_conv_nolinearlayer'
-
-    # train+validate-loop
-    training_loss = [] # maybe save to csv or something later so it can be compared to other configurations
-    validation_loss = [] # ^
-    for e in range(N_EPOCH):
-        train_loss = train(vae, dataloader_train, optimizer)
-        val_loss = validation(vae, dataloader_val)
-        training_loss.append(train_loss)
-        validation_loss.append(val_loss)
-        print(f'\nEpoch: {e+1}/{N_EPOCH} \t|\t Train loss: {train_loss:.3f} \t|\t Val loss: {val_loss:.3f}')
+    name = "ShallowConvVAE"
+    
+    model_name_ = f'{name}_latent_dims_{LATENT_DIMS}'
+    
+    # Train model
+    trainer = Trainer(model=vae, 
+                      epochs=N_EPOCH,
+                      learning_rate=LEARNING_RATE,
+                      batch_size=BATCH_SIZE,
+                      dataloader_train=dataloader_train,
+                      dataloader_val=dataloader_val,
+                      optimizer=optimizer)
+    
+    trainer.train()
+    
     
     # Save model
-    #vae.encoder.save(path='models/encoder_shallow.json')
+    #vae.encoder.save(path=f'models/{model_name_}.json')
 
 
     # PLOTTING
-    plot_reconstructions(model=vae, dataloader=dataloader_test, model_name_=model_name_, device=device, num_examples=7, save=True)
-    plot_loss(training_loss, validation_loss, save=True, model_name=model_name_)
+    plot_reconstructions(model=trainer.model, 
+                         dataloader=dataloader_test, 
+                         model_name_=model_name_, 
+                         device=device, 
+                         num_examples=7, 
+                         save=True, 
+                         loss_func=trainer.loss_function)
+    
+    plot_loss(training_loss=trainer.training_loss, 
+              validation_loss=trainer.validation_loss, 
+              save=True, 
+              model_name=model_name_)
 
     # TODO: create functions for plotting test error as function of beta (first check what b-VAE loss function looks like), latent dims, etc.
 
     
-
 if __name__ == '__main__':
     try:
         main()

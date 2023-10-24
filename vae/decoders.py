@@ -2,15 +2,41 @@ import torch
 import torch.nn as nn
 import os
 import numpy as np
+from abc import abstractmethod
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-class Decoder_conv_shallow(nn.Module):
+class BaseDecoder(nn.Module):
+    """Base class for decoder"""
+    def __init__(self, latent_dims:int=12, n_sensors:int=180) -> None:
+        super(BaseDecoder, self).__init__()
+        self.latent_dims = latent_dims
+        self.n_sensors = n_sensors
+    
+    @abstractmethod
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
+        pass
+
+    def save(self, path:str) -> None:
+        """Saves model to path"""
+        torch.save(self.state_dict(), path)
+    
+    def load(self, path:str) -> None:
+        """Loads model from path"""
+        self.load_state_dict(torch.load(path))
+
+
+class Decoder_conv_shallow(BaseDecoder):
+    """ 
+    Shallow convolutional decoder
+    One convolutional layer and one fully connected layer
+    Zero padding
+    """
     def __init__(self, 
                  latent_dims:int=12,
                  n_sensors:int=180, 
                  kernel_overlap = 0.25):  
-        super(Decoder_conv_shallow, self).__init__()
+        super().__init__()
         self.latent_dims = latent_dims
         self.in_channels = 1 
         self.out_channels = 1
@@ -24,15 +50,10 @@ class Decoder_conv_shallow(nn.Module):
 
         self.linear = nn.Sequential(
             nn.Linear(self.latent_dims, len_flat), 
-            nn.ReLU()#,
-            #nn.Linear(len_flat, 32),
-            #nn.ReLU(),
-            #nn.Linear(32,len_flat),
-            #nn.ReLU()
+            nn.ReLU()
         )
 
         self.decoder_layer1 = nn.Sequential(
-            #nn.Unflatten(dim=0, unflattened_size=(1,len_flat)),
             nn.ConvTranspose1d(
                 in_channels=self.in_channels, 
                 out_channels=self.out_channels,
@@ -48,21 +69,20 @@ class Decoder_conv_shallow(nn.Module):
         z = self.linear(z)
         x_hat = self.decoder_layer1(z)
         return x_hat
-    
-    def save(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load(self, path):
-        self.load_state_dict(torch.load(path))
 
 
 
-class Decoder_circular_conv_shallow(nn.Module):
+class Decoder_circular_conv_shallow(BaseDecoder):
+    """
+    Shallow convolutional decoder
+    One convolutional layer and one fully connected layer
+    Circular padding (https://www.tu-chemnitz.de/etit/proaut/publications/schubert19_IV.pdf chapter III section B)
+    """
     def __init__(self, 
                  latent_dims:int=12,
                  n_sensors:int=180, 
                  kernel_overlap = 0.25):  
-        super(Decoder_circular_conv_shallow, self).__init__()
+        super().__init__()
         self.latent_dims = latent_dims
         self.in_channels = 1 
         self.out_channels = 1
@@ -92,12 +112,11 @@ class Decoder_circular_conv_shallow(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
 
-    def forward(self, z):
+    def circular_tconv_1d(self, z:torch.Tensor, kernel_size:int, stride:int):
         """ 
         Following pseudocode from https://www.tu-chemnitz.de/etit/proaut/publications/schubert19_IV.pdf chapter III section B
         Doesnt work super-well
         """ 
-        z = self.linear(z)
         # 1: Run transposed conv without padding
         z_t_conv = self.deconv_block(z) # Output shape: (width*stride + p_w), where p_w = max(0, k_w - stride)
         # 2: add the first pw left columns to the last pw right columns, and add the last pw right columns to the first pw left columns
@@ -108,28 +127,32 @@ class Decoder_circular_conv_shallow(nn.Module):
         z_t_conv[:, :, :pad_width] += z_t_conv[:, :, -pad_width:]
         # 3: Remove the first pw/2 left columns and the last pw/2 right columns
         crop = pad_width // 2
-        z_t_conv = z_t_conv[:, :, crop : -crop]
+        
+        return z_t_conv[:, :, crop : -crop]
 
+    def forward(self, z):
+        z = self.linear(z)
+        # Run transposed circular deconv (shallow)
+        z_t_conv = self.circular_tconv_1d(z, self.kernel_size, self.stride)
         x_hat = self.sigmoid(z_t_conv)
         return x_hat
         
-    
-    def save(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load(self, path):
-        self.load_state_dict(torch.load(path))
 
 
 
 
-class Decoder_conv_deep(nn.Module):
+class Decoder_conv_deep(BaseDecoder):
+    """
+    Deep convolutional decoder
+    Three convolutional layers and one fully connected layer
+    Zero padding
+    """
     def __init__(self, 
                  latent_dims:int=12,
                  n_sensors:int=180, 
                  output_channels:list=[1,2,3], 
                  kernel_size:int=45,):  
-        super(Decoder_conv_deep, self).__init__()
+        super().__init__()
 
         self.n_sensors = n_sensors
         self.kernel_size = kernel_size
@@ -174,9 +197,3 @@ class Decoder_conv_deep(nn.Module):
         z = self.linear(z)
         x_hat = self.deconv_block(z)
         return x_hat
-    
-    def save(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load(self, path):
-        self.load_state_dict(torch.load(path))

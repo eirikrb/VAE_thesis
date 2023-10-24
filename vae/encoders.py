@@ -2,18 +2,53 @@ import torch
 import torch.nn as nn
 import os
 import numpy as np
+from abc import abstractmethod
 
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-# TODO: Detatch convolutional block from encoder, so that the block can be modified on its own
+# Create baseclass for encoder called BaseEncoder
+class BaseEncoder(nn.Module):
+    """Base class for encoder"""
+    def __init__(self, latent_dims:int=12, n_sensors:int=180) -> None:
+        super(BaseEncoder, self).__init__()
+        self.name = 'base'
+        self.latent_dims = latent_dims
+        self.n_sensors = n_sensors
+    
+    def reparameterize(self, mu, log_var):
+        """Reparameterization trick from VAE paper (Kingma and Welling)"""
+        # Note: log(x²) = 2log(x) -> divide by 2 to get std.dev.
+        # Thus, std = exp(log(var)/2) = exp(log(std²)/2) = exp(0.5*log(var))
+        std = torch.exp(0.5*log_var) 
+        epsilon = torch.randn_like(std).to(device)
+        z = mu + (epsilon * std)
+        return z
+    
+    @abstractmethod
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
+        pass
+    
+    def save(self, path:str) -> None:
+        """Saves model to path"""
+        torch.save(self.state_dict(), path)
+    
+    def load(self, path:str) -> None:
+        """Loads model from path"""
+        self.load_state_dict(torch.load(path))
+    
 
-class Encoder_conv_shallow(nn.Module):
+class Encoder_conv_shallow(BaseEncoder):
+    """
+    Shallow convolutional encoder
+    One convolutional layer and one fully connected layer
+    Circular padding
+    """
     def __init__(self, 
                  latent_dims:int=12,
                  n_sensors:int=180, 
                  kernel_overlap = 0.25):  
-        super(Encoder_conv_shallow, self).__init__()
+        super().__init__()
 
         self.name = 'conv_shallow'
         self.latent_dims = latent_dims
@@ -23,6 +58,7 @@ class Encoder_conv_shallow(nn.Module):
         # self.padding = (self.kernel_size - 1) // 2  # 22
         self.padding = self.kernel_size // 3  # 15
         self.stride = self.padding
+        
 
         self.encoder_layer1 = nn.Sequential(
             nn.Conv1d(
@@ -62,42 +98,30 @@ class Encoder_conv_shallow(nn.Module):
         self.N.scale = self.N.scale.to(device)
         self.kl = 0
         """
-
-    def reparameterize(self, mu, log_var):
-        std = torch.exp(0.5*log_var) # compute std.dev from log variance
-        epsilon = torch.randn_like(std).to(device) 
-        z = mu + (epsilon * std) # sampling
-        return z
-
     def forward(self, x):
-        # We do (not do) reparameterization in forward to sample from reparameterized z later on when we use encoder for feature extraction
         x = x.to(device)
         x = self.encoder_layer1(x)
-        #x = self.fc(x) # TEEEEST
-        #x = self.linear(x)
         mu =  self.fc_mu(x)
         log_var = self.fc_logvar(x)
-        z = self.reparameterize(mu, log_var)
-        return mu, log_var, z
-
-    
-    def save(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load(self, path):
-        self.load_state_dict(torch.load(path))
+        z = super().reparameterize(mu, log_var)
+        return mu, log_var, z # mu and log_var are used in loss function to compute KL divergence loss
     
 
 
 
 
-class Encoder_conv_deep(nn.Module):
+class Encoder_conv_deep(BaseEncoder):
+    """
+    Deep convolutional encoder
+    Three convolutional layers and one fully connected layer
+    Circular padding
+    """
     def __init__(self, 
                  n_sensors:int=180, 
                  output_channels:list=[3,2,1], 
                  kernel_size:int=45,
                  latent_dims:int=12):  
-        super(Encoder_conv_deep, self).__init__()
+        super().__init__()
         self.name = 'conv_deep'
         self.n_sensors = n_sensors
         self.kernel_size = kernel_size
@@ -141,12 +165,6 @@ class Encoder_conv_deep(nn.Module):
         self.fc_mu = nn.Sequential(nn.Linear(len_flat, self.latent_dims), nn.ReLU()) 
         self.fc_logvar = nn.Sequential(nn.Linear(len_flat, self.latent_dims), nn.ReLU())
 
-    def reparameterize(self, mu, log_var):
-        std = torch.exp(0.5*log_var) # compute std.dev from log variance
-        epsilon = torch.randn_like(std).to(device) 
-        z = mu + (epsilon * std) # sampling
-        return z
-
     def forward(self, x):
         x = x.to(device)
         x = self.conv_block(x)
@@ -154,10 +172,3 @@ class Encoder_conv_deep(nn.Module):
         log_var = self.fc_logvar(x)
         z = self.reparameterize(mu, log_var)
         return mu, log_var, z
-
-    
-    def save(self, path):
-        torch.save(self.state_dict(), path)
-
-    def load(self, path):
-        self.load_state_dict(torch.load(path))

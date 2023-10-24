@@ -1,21 +1,13 @@
 from math import ceil
-import sklearn
 import torch
-# from torch.utils.data import Dataset, DataLoader
-
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-
 import pandas as pd
 
 N_SENSORS = 180
 
 class LiDARDataset(torch.utils.data.Dataset):
-  '''
-  Prepare the lidar observation dataset
-  '''
+  """Prepare the lidar observation dataset"""
 
   def __init__(self, 
                X:np.ndarray,  
@@ -48,10 +40,13 @@ def load_LiDARDataset(path_x:str,
                       shuffle:bool=True,
                       extend_dataset_roll:bool=False,
                       roll_degrees:list=[90,180],
-                      add_noise_to_train:bool=False):
-    '''
-    Load training set, validation set and test set from paths.
-    '''
+                      add_noise_to_train:bool=False) -> tuple:
+    """
+    Load data, split into train, validation and test sets, and create dataloaders.
+    - Possible to extend dataset by rolling (rotating) the data
+    - Possible to add noise to the training set.
+    """
+
     X = np.loadtxt(path_x)
     X = 1 - X/150
 
@@ -100,24 +95,20 @@ def load_LiDARDataset(path_x:str,
     
     return data_train, data_val, data_test, dataloader_train, dataloader_val, dataloader_test
 
-def prev_timesteps_feature_enginering(X:np.ndarray, time_steps:int):
 
+def prev_timesteps_feature_enginering(X:np.ndarray, time_steps:int):
     X_concat = X[:,:,None].copy()
     X_prev   = X.copy()
     x_empty  = np.array([150]*N_SENSORS).reshape((1, N_SENSORS))
-
     for i in range(time_steps):
         X_prev = X_prev[:-1,:].copy()
         X_prev = np.concatenate((x_empty, X_prev), axis=0)
         X_concat = np.concatenate((X_concat, X_prev[:,:,None]), axis=2)
-    
     return X_concat
     
 
-def extend_dataset_rolling(X:np.ndarray, roll:int=90):
-    '''
-    Extend the dataset by rolling the data by a "roll" number of steps (two degrees per one step).
-    '''
+def extend_dataset_rolling(X:np.ndarray, roll:int=90) -> np.ndarray:
+    """Extend the dataset by rolling the data by a "roll" number of steps (two degrees per one step)."""
     X_extended = X.copy()
     X_extended = np.concatenate((X_extended, np.roll(X, roll, axis=1)), axis=0)
     return X_extended
