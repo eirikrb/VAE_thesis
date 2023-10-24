@@ -5,7 +5,7 @@ import os
 import sys
 from vae.VAE import VAE
 from vae.encoders import Encoder_conv_shallow, Encoder_conv_deep
-from vae.decoders import Decoder_conv_shallow, Decoder_conv_deep, Decoder_circular_conv_shallow
+from vae.decoders import Decoder_conv_shallow, Decoder_conv_deep, Decoder_circular_conv_shallow2
 import torch.nn.functional as F
 from utils.dataloader import load_LiDARDataset
 from utils.plotting import plot_reconstructions, plot_loss
@@ -14,7 +14,7 @@ from trainer import Trainer
 
 # HYPERPRAMETERS
 LEARNING_RATE = 0.001
-N_EPOCH = 2
+N_EPOCH = 40
 BATCH_SIZE = 32     
 LATENT_DIMS = 12
 
@@ -36,7 +36,7 @@ def main():
     
     # Create Variational Autoencoder(s)
     encoder = Encoder_conv_deep(latent_dims=LATENT_DIMS)
-    decoder = Decoder_conv_deep(latent_dims=LATENT_DIMS)
+    decoder = Decoder_circular_conv_shallow2(latent_dims=LATENT_DIMS)
     vae = VAE(encoder=encoder, decoder=decoder, latent_dims=LATENT_DIMS).to(device)
     optimizer = Adam(vae.parameters(), lr=LEARNING_RATE)
     name = "ShallowConvVAE"
@@ -64,7 +64,7 @@ def main():
                          dataloader=dataloader_test, 
                          model_name_=model_name_, 
                          device=device, 
-                         num_examples=7, 
+                         num_examples=20, 
                          save=True, 
                          loss_func=trainer.loss_function)
     

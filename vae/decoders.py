@@ -12,6 +12,28 @@ class BaseDecoder(nn.Module):
         super(BaseDecoder, self).__init__()
         self.latent_dims = latent_dims
         self.n_sensors = n_sensors
+
+    def circular_tconv_1d(self, deconv_block:nn.ConvTranspose1d, z:torch.Tensor, kernel_size:int, stride:int):
+        """
+        Circular transposed convolution in one dimension given a deconvolution block with some kernel size and stride
+        Following the Tensorflow 2D code from: https://www.tu-chemnitz.de/etit/proaut/en/research/rsrc/ccnn/code/ccnn_layers.py 
+        """
+        pad_width = int(
+            0.5 + (kernel_size - 1.) / (2. * stride))  # ceil
+        crop = pad_width * stride
+
+        # concatenate the first pad_width (left) columns to the last (pad_width) right columns, and
+        # concatenate the last pad_width (right) columns to the first (pad_width) left columns
+        pad_left = z[:, :, :pad_width]
+        pad_right = z[:, :, -pad_width:]
+        z_concat = torch.cat((pad_left, z, pad_right), dim=2)
+
+        # Perform circular convolution with regular zero-padding ('same' in tensorflow code):
+        z_t_conv = deconv_block(z_concat)
+
+        # Remove the first crop left columns and the last pw/2 right columns and return
+        z_t_conv_cropped = z_t_conv[:, :, crop:-crop]
+        return z_t_conv_cropped
     
     @abstractmethod
     def forward(self, x:torch.Tensor) -> torch.Tensor:
@@ -71,7 +93,7 @@ class Decoder_conv_shallow(BaseDecoder):
         return x_hat
 
 
-
+'''
 class Decoder_circular_conv_shallow(BaseDecoder):
     """
     Shallow convolutional decoder
@@ -137,7 +159,52 @@ class Decoder_circular_conv_shallow(BaseDecoder):
         x_hat = self.sigmoid(z_t_conv)
         return x_hat
         
+'''
 
+class Decoder_circular_conv_shallow2(BaseDecoder):
+    """
+    Shallow convolutional decoder
+    One convolutional layer and one fully connected layer
+    Circular padding (https://www.tu-chemnitz.de/etit/proaut/publications/schubert19_IV.pdf chapter III section B)
+    """
+    def __init__(self,
+                 latent_dims: int = 12,
+                 n_sensors: int = 180,
+                 kernel_overlap=0.25):
+        super().__init__()
+        self.latent_dims = latent_dims
+        self.in_channels = 1
+        self.out_channels = 1
+        self.kernel_size = round(n_sensors * kernel_overlap)  # 45
+        self.kernel_size = self.kernel_size + 1 if self.kernel_size % 2 == 0 else self.kernel_size  # Make it odd sized
+        # self.padding = (self.kernel_size - 1) // 2  # 22
+        self.padding = self.kernel_size // 3  # 15
+        self.stride = self.padding
+
+        len_flat = 12  # bc. of combination of input dim, kernel, stride and padding. TODO: Automate.
+
+        self.linear = nn.Sequential(
+            nn.Linear(self.latent_dims, len_flat),
+            nn.ReLU()
+        )
+
+        # No nn.sequentioal bc. of circular padding in between layers
+        self.deconv_block = nn.ConvTranspose1d(
+            in_channels=self.in_channels,
+            out_channels=self.out_channels,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding, # added to look like the code in the paper
+        )
+
+        self.sigmoid = nn.Sigmoid()
+   
+
+    def forward(self, z):
+        z = self.linear(z)
+        z_t_conv = super().circular_tconv_1d(deconv_block=self.deconv_block, z=z, kernel_size=self.kernel_size, stride=self.stride)
+        x_hat = self.sigmoid(z_t_conv)
+        return x_hat
 
 
 
