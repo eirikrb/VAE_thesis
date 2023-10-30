@@ -17,14 +17,14 @@ data_train, data_val, data_test, dataloader_train, dataloader_val, dataloader_te
 
 #en = Encoder_shallow()
 #de = Decoder_shallow()
-
 """
+
 data = data_train.X
 print(data.shape)
 z = en(data)
 print(z.shape)
 reconstructed = de(z)
-print(reconstructed.shape)"""
+print(reconstructed.shape)
 
 kernel_size = 45
 stride = 15
@@ -54,5 +54,5 @@ x_hat = z_t_conv[:, :, crop : -crop]
 
 print(x_hat.shape)
 print(x_hat[0,1,:])
-
+"""
 

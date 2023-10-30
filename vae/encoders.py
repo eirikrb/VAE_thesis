@@ -21,7 +21,7 @@ class BaseEncoder(nn.Module):
         # Note: log(x²) = 2log(x) -> divide by 2 to get std.dev.
         # Thus, std = exp(log(var)/2) = exp(log(std²)/2) = exp(0.5*log(var))
         std = torch.exp(0.5*log_var) 
-        epsilon = torch.randn_like(std).to(device)
+        epsilon = torch.randn_like(std).to(device) # ~N(0,I)
         z = mu + (epsilon * std)
         return z
     
@@ -106,9 +106,6 @@ class Encoder_conv_shallow(BaseEncoder):
         z = super().reparameterize(mu, log_var)
         return mu, log_var, z # mu and log_var are used in loss function to compute KL divergence loss
     
-
-
-
 
 class Encoder_conv_deep(BaseEncoder):
     """

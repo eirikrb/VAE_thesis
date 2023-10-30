@@ -12,6 +12,7 @@ class Trainer():
                  dataloader_train:torch.utils.data.DataLoader,
                  dataloader_val:torch.utils.data.DataLoader,
                  optimizer:torch.optim.Optimizer,
+                 beta:float=1
                  ) -> None:
     
         self.model = model
@@ -21,50 +22,82 @@ class Trainer():
         self.dataloader_train = dataloader_train
         self.dataloader_val = dataloader_val
         self.optimizer = optimizer
+        self.beta = beta
         
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        self.training_loss = []
-        self.validation_loss = []
+        self.training_loss = {'Total loss':[], 'Reconstruction loss':[], 'KL divergence loss':[]}
+        self.validation_loss = {'Total loss':[], 'Reconstruction loss':[], 'KL divergence loss':[]}
 
-    def loss_function(self, x_hat, x, mu, log_var):
-        """Calculates loss function for VAE"""
+    def loss_function(self, x_hat, x, mu, log_var, beta):
+        """Calculates loss function for VAE, returns (total loss, reconstruction loss, KL divergence loss)"""
         BCE_loss = F.binary_cross_entropy(x_hat, x, reduction='sum') # Reconstruction loss
         KLD_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()) # KL divergence loss
-        return BCE_loss + KLD_loss
+        return BCE_loss + beta*KLD_loss, BCE_loss, KLD_loss
     
     def train_epoch(self):
         """Trains model for one epoch"""
         self.model.train()
-        train_loss = 0.0
+
+        tot_train_loss = 0.0
+        bce_train_loss = 0.0
+        kl_train_loss = 0.0
+
         for x_batch in self.dataloader_train:
             x_batch = x_batch.to(self.device)
             x_hat, mu, log_var = self.model(x_batch)
-            loss = self.loss_function(x_hat, x_batch, mu, log_var)
+            loss, bce_loss, kl_loss = self.loss_function(x_hat, x_batch, mu, log_var, self.beta)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            train_loss += loss.item()
-        return train_loss/len(self.dataloader_train.dataset) #sjekk
+            tot_train_loss += loss.item()
+            bce_train_loss += bce_loss.item()
+            kl_train_loss += kl_loss.item()
+
+        avg_tot_train_loss = tot_train_loss/len(self.dataloader_train.dataset)
+        avg_bce_train_loss = bce_train_loss/len(self.dataloader_train.dataset)
+        avg_kl_train_loss = kl_train_loss/len(self.dataloader_train.dataset)
+
+        return avg_tot_train_loss, avg_bce_train_loss, avg_kl_train_loss
     
     def validation(self):
         """Calculates validation loss"""
         self.model.eval()
-        val_loss = 0.0
+
+        tot_val_loss = 0.0
+        bce_val_loss = 0.0
+        kl_val_loss = 0.0
+
         with torch.no_grad():
             for x in self.dataloader_val:
                 x = x.to(self.device)
                 x_hat, mu, log_var = self.model(x)
-                loss = self.loss_function(x_hat, x, mu, log_var)
-                val_loss += loss.item()
-        return val_loss/len(self.dataloader_val.dataset) # sjekk
+                loss, bce_loss, kl_loss = self.loss_function(x_hat, x, mu, log_var, self.beta)
+                tot_val_loss += loss.item()
+                bce_val_loss += bce_loss.item()
+                kl_val_loss += kl_loss.item()
+
+        avg_tot_val_loss = tot_val_loss/len(self.dataloader_val.dataset)
+        avg_bce_val_loss = bce_val_loss/len(self.dataloader_val.dataset)
+        avg_kl_val_loss = kl_val_loss/len(self.dataloader_val.dataset)  
+
+        return avg_tot_val_loss, avg_bce_val_loss, avg_kl_val_loss
 
 
     def train(self):
         """Main training loop. Trains model for self.epochs epochs"""
         for e in range(self.epochs):
-            train_loss = self.train_epoch()
-            val_loss = self.validation()
-            self.training_loss.append(train_loss)
-            self.validation_loss.append(val_loss)
+            
+            # Train and validate for given epoch
+            train_loss, train_loss_bce, train_loss_kl = self.train_epoch()
+            val_loss, val_loss_bce, val_loss_kl = self.validation()
+            # Training losses
+            self.training_loss['Total loss'].append(train_loss)
+            self.training_loss['Reconstruction loss'].append(train_loss_bce)
+            self.training_loss['KL divergence loss'].append(train_loss_kl)
+            # Validation losses
+            self.validation_loss['Total loss'].append(val_loss)
+            self.validation_loss['Reconstruction loss'].append(val_loss_bce)
+            self.validation_loss['KL divergence loss'].append(val_loss_kl)
+
             print(f'\nEpoch: {e+1}/{self.epochs} \t|\t Train loss: {train_loss:.3f} \t|\t Val loss: {val_loss:.3f}')
