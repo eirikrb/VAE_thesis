@@ -1,58 +1,104 @@
 """MIDLERTIDIG TESTFIL FOR VAE"""
+# Currently testing tsn and umap for latent space visualization
 
 import torch
 import torch.nn as nn
 import os
 import numpy as np
 from utils.dataloader import load_LiDARDataset
+from vae.VAE import VAE
+from vae.encoders import Encoder_conv_shallow, Encoder_conv_deep
+from vae.decoders import Decoder_circular_conv_shallow2, Decoder_circular_conv_deep
+from trainer import Trainer, TrainerInfoVAE
+from torch.optim import Adam
+from sklearn.manifold import TSNE
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+
 
 path_x =  'data/LiDAR_MovingObstaclesNoRules.csv'
 
+
+LEARNING_RATE = 0.001
+N_EPOCH = 40
+BATCH_SIZE = 16  
+LATENT_DIMS = 12
+beta = 1
+
+
 data_train, data_val, data_test, dataloader_train, dataloader_val, dataloader_test  = load_LiDARDataset(path_x,
                                                                                                         mode='max', 
-                                                                                                        batch_size=16, 
+                                                                                                        batch_size=BATCH_SIZE, 
                                                                                                         train_test_split=0.7,
                                                                                                         train_val_split=0.3,
                                                                                                         shuffle=True)
 
-#en = Encoder_shallow()
-#de = Decoder_shallow()
+encoder = Encoder_conv_deep(latent_dims=LATENT_DIMS)
+decoder = Decoder_circular_conv_deep(latent_dims=LATENT_DIMS)
+vae = VAE(encoder, decoder, latent_dims=LATENT_DIMS, beta=beta)
+
+optimizer = Adam(vae.parameters(), lr=LEARNING_RATE) # TODO: make this an argument, and make it possible to choose between Adam and SGD
+trainer = TrainerInfoVAE(model=vae, 
+                    epochs=N_EPOCH,
+                    learning_rate=LEARNING_RATE,
+                    batch_size=BATCH_SIZE,
+                    dataloader_train=dataloader_train,
+                    dataloader_val=dataloader_val,
+                    optimizer=optimizer,
+                    beta=beta)
+
+trainer.train()
+
+"""
+df = pd.DataFrame(latent_representations)
+
+plt.style.use('ggplot')
+#plt.style.use('seaborn-poster')
+plt.rc('font', family='serif')
+plt.rc('xtick', labelsize=12)
+plt.rc('ytick', labelsize=12)
+plt.rc('axes', labelsize=12)
+
+angles = np.linspace(0, 2*np.pi, 180) - np.pi / 2
+X = np.ones_like(x) - x     
+# Create a circular test plot to represent a single top-down view of the range data
+fig = plt.figure(figsize=(17,5))
+#fig, (ax1,ax2) = plt.subplots(1,2, figsize=(10,5))
+ax1 = fig.add_subplot(121,projection='polar')
+ax1.scatter(angles, X, s=1.2)
+ax2 = fig.add_subplot(122)
+#plt.savefig('plots/test_plot.pdf', bbox_inches='tight')
+
+#fig2 = plt.figure()
+x = np.linspace(min(mu) - 3*sigma[np.argmin(mu)], max(mu) + 3*sigma[np.argmax(mu)], 100)
+for i in range(len(mu)):
+    if i > 6:
+        lin = '--'
+    else:
+        lin = '-'
+    ax2.plot(x, stats.norm.pdf(x, mu[i], sigma[i]), label=f'z{i+1}', linestyle=lin, linewidth=1.5)
+ax2.legend()
+
+ax2.set_ylabel('Probability density')
+#kde_plot = df.plot.kde()
+#fig = kde_plot.get_figure()
+plt.savefig('plots/latent_space.pdf', bbox_inches='tight')
 """
 
-data = data_train.X
-print(data.shape)
-z = en(data)
-print(z.shape)
-reconstructed = de(z)
-print(reconstructed.shape)
 
-kernel_size = 45
-stride = 15
-
-deconv_block = nn.ConvTranspose1d(
-    in_channels=1, 
-    out_channels=1,
-    kernel_size=45,
-    stride=15,
-    #padding=self.padding,
-    #output_padding=1,
-)
-
-z = torch.ones(16, 1, 12)
-
-# 1: Run transposed conv without padding
-z_t_conv = deconv_block(z) # Output shape: (width*stride + p_w), where p_w = max(0, k_w - stride)
-# 2: add the first pw left columns to the last pw right columns, and add the last pw right columns to the first pw left columns
-pad_width = int(max(0, kernel_size - stride))
-# Right side
-z_t_conv[:, :, -pad_width:] += z_t_conv[:, :, :pad_width]
-# Left side
-z_t_conv[:, :, :pad_width] += z_t_conv[:, :, -pad_width:]
-# 3: Remove the first pw/2 left columns and the last pw/2 right columns
-crop = pad_width // 2
-x_hat = z_t_conv[:, :, crop : -crop]
-
-print(x_hat.shape)
-print(x_hat[0,1,:])
 """
 
+#tsne = TSNE(n_components=2, verbose=1)
+#tsne_results = tsne.fit_transform(latent_representations)
+#print(tsne_results.shape)
+
+df = pd.DataFrame()
+df['labels'] = labels
+df['comp-1'] = tsne_results[:,0]
+df['comp-2'] = tsne_results[:,1]
+
+
+plot = sns.scatterplot(
+"""

@@ -1,0 +1,4 @@
+Metadata: Latent dim: 2, number of seeds: 5, epochs: 25, batch size: 16, learning rate: 0.001Mean: 35.56543324943597
+Std: 0.026247653177803365
+Confidence interval: 0.023007082408119425
+All test losses: [35.53022992 35.57558844 35.53840635 35.59429348 35.58864806]

@@ -30,6 +30,24 @@ class LiDARDataset(torch.utils.data.Dataset):
   def __getitem__(self, i):
     return self.X[i]
 
+def concat_csvs(csvs:tuple, output_path:str):
+   """Stacks n csvs from list csvs containing paths into one csv at output_path"""
+   arrs = tuple([np.loadtxt(csv) for csv in csvs])
+   arr = np.concatenate(arrs, axis=0)
+   np.savetxt(output_path, arr, delimiter=" ")
+
+
+def apply_random_rotations(X:np.ndarray, n_rotations:int=10):
+    """Apply n_rotations random rotations in the range [-180,180] deg to X"""
+    X_rotated = X.copy()
+    for i in range(n_rotations):
+        roll = np.random.randint(-180, 180)
+        roll_int = int(roll/2)
+        # Get random sample from X, rotate it and add it to X_rotated
+        index = np.random.randint(0, len(X))
+        X_samples = X[index:index+2,:]
+        X_rotated = np.concatenate((X_rotated, np.roll(X_samples, roll, axis=1)), axis=0)
+    return X_rotated
 
 def load_LiDARDataset(path_x:str, 
                       batch_size:int, 
@@ -39,7 +57,8 @@ def load_LiDARDataset(path_x:str,
                       train_val_split:float=0.2, 
                       shuffle:bool=True,
                       extend_dataset_roll:bool=False,
-                      roll_degrees:list=[90,180],
+                      roll_degrees:list=[-90,90],
+                      num_rotations:int=1000,
                       add_noise_to_train:bool=False) -> tuple:
     """
     Load data, split into train, validation and test sets, and create dataloaders.
@@ -51,10 +70,12 @@ def load_LiDARDataset(path_x:str,
     X = 1 - X/150
 
     if extend_dataset_roll:
+        #X = apply_random_rotations(X, n_rotations=num_rotations)
+        #'''
         for roll_deg in roll_degrees:
             roll_int = int(roll_deg/2)
             X = extend_dataset_rolling(X=X, roll=roll_int)
-    
+        #'''
     data_size  = len(X)
     train_size = int(train_test_split * data_size)
     val_size   = int(train_val_split * train_size)

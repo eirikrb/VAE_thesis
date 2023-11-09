@@ -16,12 +16,13 @@ class BaseEncoder(nn.Module):
         self.latent_dims = latent_dims
         self.n_sensors = n_sensors
     
-    def reparameterize(self, mu, log_var):
-        """Reparameterization trick from VAE paper (Kingma and Welling)"""
+    def reparameterize(self, mu, log_var, eps_weight=1):
+        """Reparameterization trick from VAE paper (Kingma and Welling). Eps weight in [0,1] controls the amount of noise added to the latent space."""
         # Note: log(x²) = 2log(x) -> divide by 2 to get std.dev.
         # Thus, std = exp(log(var)/2) = exp(log(std²)/2) = exp(0.5*log(var))
-        std = torch.exp(0.5*log_var) 
-        epsilon = torch.randn_like(std).to(device) # ~N(0,I)
+        std = torch.exp(0.5*log_var)
+        epsilon = torch.distributions.Normal(0, eps_weight).sample(mu.shape).to(device) # ~N(0,I)
+        #epsilon = torch.randn_like(std).to(device) # ~N(0,I)
         z = mu + (epsilon * std)
         return z
     
@@ -47,7 +48,8 @@ class Encoder_conv_shallow(BaseEncoder):
     def __init__(self, 
                  latent_dims:int=12,
                  n_sensors:int=180, 
-                 kernel_overlap = 0.25):  
+                 kernel_overlap:float=0.25,
+                 eps_weight:float=1):  
         super().__init__()
 
         self.name = 'conv_shallow'
@@ -58,6 +60,7 @@ class Encoder_conv_shallow(BaseEncoder):
         # self.padding = (self.kernel_size - 1) // 2  # 22
         self.padding = self.kernel_size // 3  # 15
         self.stride = self.padding
+        self.eps_weight = eps_weight
         
 
         self.encoder_layer1 = nn.Sequential(
@@ -103,7 +106,7 @@ class Encoder_conv_shallow(BaseEncoder):
         x = self.encoder_layer1(x)
         mu =  self.fc_mu(x)
         log_var = self.fc_logvar(x)
-        z = super().reparameterize(mu, log_var)
+        z = super().reparameterize(mu, log_var, self.eps_weight)
         return mu, log_var, z # mu and log_var are used in loss function to compute KL divergence loss
     
 
@@ -117,13 +120,15 @@ class Encoder_conv_deep(BaseEncoder):
                  n_sensors:int=180, 
                  output_channels:list=[3,2,1], 
                  kernel_size:int=45,
-                 latent_dims:int=12):  
+                 latent_dims:int=12,
+                 eps_weight:float=1):  
         super().__init__()
         self.name = 'conv_deep'
         self.n_sensors = n_sensors
         self.kernel_size = kernel_size
         self.output_channels = output_channels
         self.latent_dims = latent_dims
+        self.eps_weight = eps_weight
 
         self.conv_block = nn.Sequential(
             nn.Conv1d(
@@ -167,5 +172,5 @@ class Encoder_conv_deep(BaseEncoder):
         x = self.conv_block(x)
         mu =  self.fc_mu(x)
         log_var = self.fc_logvar(x)
-        z = self.reparameterize(mu, log_var)
+        z = self.reparameterize(mu, log_var, self.eps_weight)
         return mu, log_var, z

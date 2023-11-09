@@ -208,6 +208,73 @@ class Decoder_circular_conv_shallow2(BaseDecoder):
 
 
 
+class Decoder_circular_conv_deep(BaseDecoder):
+    """
+    Deep convolutional decoder
+    Three convolutional layers and one fully connected layer
+    Circular padding
+    """
+    def __init__(self, 
+                 latent_dims:int=12,
+                 n_sensors:int=180, 
+                 output_channels:list=[1,2,3], 
+                 kernel_size:int=45,):  
+        super().__init__()
+
+        self.n_sensors = n_sensors
+        self.kernel_size = kernel_size
+        self.output_channels = output_channels
+        self.latent_dims = latent_dims
+
+        len_flat = 12 # bc. of combination of input dim, kernel, stride and padding. TODO: Automate.
+
+        self.linear = nn.Sequential(
+            nn.Linear(self.latent_dims, len_flat),
+            nn.ReLU()
+        )        
+
+        self.deconv1 = nn.ConvTranspose1d(
+            in_channels  = self.output_channels[0],
+            out_channels = self.output_channels[1],
+            kernel_size  = 3,
+            stride       = 1,
+            padding      = 1
+        )
+
+        self.relu1 = nn.ReLU()
+
+        self.deconv2 = nn.ConvTranspose1d(
+            in_channels  = self.output_channels[1],
+            out_channels = self.output_channels[2],
+            kernel_size  = 3,
+            stride       = 1,
+            padding      = 1
+        )
+
+        self.relu2 = nn.ReLU()
+
+        self.deconv3 = nn.ConvTranspose1d(
+            in_channels  = self.output_channels[2],
+            out_channels = 1,
+            kernel_size  = 45,
+            stride       = 15,
+            padding      = 15
+        )
+
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, z):
+        z1 = self.linear(z)
+        z2 = super().circular_tconv_1d(deconv_block=self.deconv1, z=z1, kernel_size=3, stride=1)
+        z3 = self.relu1(z2)
+        z4 = super().circular_tconv_1d(deconv_block=self.deconv2, z=z3, kernel_size=3, stride=1)
+        z5 = self.relu2(z4)
+        z6 = super().circular_tconv_1d(deconv_block=self.deconv3, z=z5, kernel_size=45, stride=15)
+        x_hat = self.sigmoid(z6)
+        return x_hat
+
+
+
 class Decoder_conv_deep(BaseDecoder):
     """
     Deep convolutional decoder
