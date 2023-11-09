@@ -95,7 +95,7 @@ def main(args):
                             optimizer=optimizer,
                             beta=BETA)
         
-        #trainer.train()
+        trainer.train()
 
         # Save model
         if args.save_model:
