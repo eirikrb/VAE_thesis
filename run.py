@@ -22,8 +22,8 @@ LATENT_DIMS = 12
 
 def main(args):
     # Set hyperparameters
-    BATCH_SIZE = args.batch_size        # Default: 16
-    N_EPOCH = args.epochs               # Default: 15
+    BATCH_SIZE = args.batch_size        # Default: 64
+    N_EPOCH = args.epochs               # Default: 25
     LATENT_DIMS = args.latent_dims      # Default: 12
     LEARNING_RATE = args.learning_rate  # Default: 0.001
     NUM_SEEDS = args.num_seeds          # Default: 1
@@ -43,7 +43,7 @@ def main(args):
     DATA_PATHS = [path_moving_dense, path_static_dense, path_static_moving, path_moving_obs_no_rules]
 
     concat_path = 'data/concatinated_data.csv'
-    concat_csvs(DATA_PATHS, concat_path)
+    #concat_csvs(DATA_PATHS, concat_path)
     
     # Load data
     datapath = concat_path 
@@ -78,14 +78,6 @@ def main(args):
 
         # Train model
         optimizer = Adam(vae.parameters(), lr=LEARNING_RATE) # TODO: make this an argument, and make it possible to choose between Adam and SGD
-        """trainer = Trainer(model=vae, 
-                            epochs=N_EPOCH,
-                            learning_rate=LEARNING_RATE,
-                            batch_size=BATCH_SIZE,
-                            dataloader_train=dataloader_train,
-                            dataloader_val=dataloader_val,
-                            optimizer=optimizer)"""
-        
         trainer = Trainer(model=vae, 
                             epochs=N_EPOCH,
                             learning_rate=LEARNING_RATE,
@@ -95,7 +87,7 @@ def main(args):
                             optimizer=optimizer,
                             beta=BETA)
         
-        trainer.train()
+        #trainer.train()
 
         # Save model
         if args.save_model:
@@ -178,7 +170,7 @@ def main(args):
                 
                 # Get test error anyways
                 tester = Tester(model=vae, dataloader_test=dataloader_test, trainer=trainer)
-                test_loss = tester.test()
+                test_loss, _, _ = tester.test()
                 print(f'Test loss seed {i}: {test_loss}')
                 test_losses[i] = test_loss
                 
@@ -232,13 +224,13 @@ def main(args):
                                                                                                 add_noise_to_train=True)
                     # Create Variational Autoencoder(s)
                     if args.model_name == 'ShallowConvVAE':
-                        encoder = Encoder_conv_shallow(latent_dims=LATENT_DIMS, eps_weight=EPS_WEIGHT)
-                        decoder = Decoder_circular_conv_shallow2(latent_dims=LATENT_DIMS)
+                        encoder = Encoder_conv_shallow(latent_dims=l, eps_weight=EPS_WEIGHT)
+                        decoder = Decoder_circular_conv_shallow2(latent_dims=l)
                     if args.model_name == 'DeepConvVAE':
-                        encoder = Encoder_conv_deep(latent_dims=LATENT_DIMS, eps_weight=EPS_WEIGHT)
-                        decoder = Decoder_circular_conv_deep(latent_dims=LATENT_DIMS)
+                        encoder = Encoder_conv_deep(latent_dims=l, eps_weight=EPS_WEIGHT)
+                        decoder = Decoder_circular_conv_deep(latent_dims=l)
 
-                    vae = VAE(encoder=encoder, decoder=decoder, latent_dims=LATENT_DIMS).to(device)
+                    vae = VAE(encoder=encoder, decoder=decoder, latent_dims=l).to(device)
                     optimizer = Adam(vae.parameters(), lr=LEARNING_RATE)
                     
                     trainer = Trainer(model=vae, 
@@ -256,7 +248,7 @@ def main(args):
 
                     # Get test error 
                     tester = Tester(model=vae, dataloader_test=dataloader_test, trainer=trainer)
-                    test_loss = tester.test()
+                    test_loss, _, __build_class__ = tester.test()
                     print(f'Test loss seed {i}: {test_loss}')
                     test_losses[i] = test_loss
 
@@ -270,12 +262,123 @@ def main(args):
                 kl_val_losses_for_latent_dims.append(kl_val_losses)
 
                 if 'test_loss_report' in args.plot:
+                    model_name_ = f'{model_name_}_latsize_{l}'
                     metadata = f'Latent dim: {l}, number of seeds: {NUM_SEEDS}, epochs: {N_EPOCH}, batch size: {BATCH_SIZE}, learning rate: {LEARNING_RATE}'
                     tester.report_test_stats(test_losses=test_losses, model_name=model_name_, metadata=metadata)
 
             labels = [f'Latent dim = {l}' for l in latent_dims_grid]
             plot_loss_multiple_seeds(loss_trajectories=total_val_losses_for_latent_dims, labels=labels, model_name=model_name_, save=True) # vurdere å slitte opp?
-            plot_separated_losses(total_val_losses_for_latent_dims, bce_val_losses_for_latent_dims, kl_val_losses_for_latent_dims, labels, model_name=model_name_, save=True)  
+            plot_separated_losses(total_val_losses_for_latent_dims, bce_val_losses_for_latent_dims, kl_val_losses_for_latent_dims, labels, model_name=model_name_, save=True) 
+          
+            
+        if 'eps_weight_sweep' in args.plot:
+            model_name_ = f'{name}_eps_weight_sweep'
+            eps_weights = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+            
+            all_test_losses = np.zeros((NUM_SEEDS, len(eps_weights)))
+            all_test_losses_bce = np.zeros((NUM_SEEDS, len(eps_weights)))
+            all_test_losses_kl = np.zeros((NUM_SEEDS, len(eps_weights)))
+            
+            print('Starting eps_weight sweep...')
+            for e_idx, e in enumerate(eps_weights):
+                test_losses = np.zeros(NUM_SEEDS)
+                for i in range(NUM_SEEDS):
+                    print(f'Random seed {i+1}/{NUM_SEEDS}')
+                    # Generate different initialization of training and validation data for the new trainer
+                    _, _, _, dataloader_train, dataloader_val, dataloader_test  = load_LiDARDataset(datapath,  
+                                                                                                mode='max', 
+                                                                                                batch_size=BATCH_SIZE, 
+                                                                                                train_test_split=0.7,
+                                                                                                train_val_split=0.3,
+                                                                                                shuffle=True,
+                                                                                                extend_dataset_roll=True,
+                                                                                                roll_degrees=rolling_degrees,
+                                                                                                add_noise_to_train=True)
+                    # Create Variational Autoencoder(s)
+                    if args.model_name == 'ShallowConvVAE':
+                        encoder = Encoder_conv_shallow(latent_dims=LATENT_DIMS, eps_weight=e)
+                        decoder = Decoder_circular_conv_shallow2(latent_dims=LATENT_DIMS)
+                    if args.model_name == 'DeepConvVAE':
+                        encoder = Encoder_conv_deep(latent_dims=LATENT_DIMS, eps_weight=e)
+                        decoder = Decoder_circular_conv_deep(latent_dims=LATENT_DIMS)
+
+                    vae = VAE(encoder=encoder, decoder=decoder, latent_dims=LATENT_DIMS).to(device)
+                    optimizer = Adam(vae.parameters(), lr=LEARNING_RATE)
+                    
+                    trainer = Trainer(model=vae, 
+                                    epochs=N_EPOCH,
+                                    learning_rate=LEARNING_RATE,
+                                    batch_size=BATCH_SIZE,
+                                    dataloader_train=dataloader_train,
+                                    dataloader_val=dataloader_val,
+                                    optimizer=optimizer)
+                    trainer.train()
+                    
+                    # Get test error 
+                    tester = Tester(model=vae, dataloader_test=dataloader_test, trainer=trainer)
+                    test_loss, test_loss_bce, test_loss_kl = tester.test()
+                    print(f'Test loss seed {i}: {test_loss}')
+                    all_test_losses[i,e_idx] = test_loss
+                    all_test_losses_bce[i,e_idx] = test_loss_bce
+                    all_test_losses_kl[i,e_idx] = test_loss_kl
+                    
+                    # Plot some reconstructions for each model 
+                    model_name_inner = f'{model_name_}_eps_{e}_seed_{i}'
+                    """
+                    plot_reconstructions(model=trainer.model, 
+                                         dataloader=dataloader_test, 
+                                         model_name_=model_name_inner, 
+                                         num_examples=3,
+                                         device=device,
+                                         save=True,
+                                         loss_func=trainer.loss_function)
+                    
+                    plot_latent_distributions(model=trainer.model,
+                                              dataloader=dataloader_test,
+                                              model_name=model_name_inner,
+                                              num_examples=3,
+                                              save=True,
+                                              device=device)
+                    """
+                    
+                    del trainer, vae, encoder, decoder, optimizer 
+                
+                #all_test_losses.append(test_losses)
+                #all_test_losses[,:] = test_losses
+                
+                metadata = f'Latent dim: {LATENT_DIMS}, number of seeds: {NUM_SEEDS}, epochs: {N_EPOCH}, batch size: {BATCH_SIZE}, learning rate: {LEARNING_RATE}\n'
+                tester.report_test_stats(test_losses=test_losses, model_name=model_name_, metadata=metadata)
+            
+            # Plot test errors as function of the epw_weights
+            plt.style.use('ggplot')
+            plt.rc('font', family='serif')
+            plt.rc('xtick', labelsize=12)
+            plt.rc('ytick', labelsize=12)
+            plt.rc('axes', labelsize=12)
+            fig, ax = plt.subplots()
+            x = np.arange(len(all_test_losses[0])) # num_samples
+
+            losses = [all_test_losses, all_test_losses_bce, all_test_losses_kl]
+            labels = ['Total loss', 'Reconstruction loss', 'KL divergence']
+            
+            for i, loss_traj in enumerate(losses):
+                # Get mean and variance
+                conf_interval = 1.96 * np.std(loss_traj, axis=0) / np.sqrt(len(x)) # 95% confidence interval
+                mean_error_traj = np.mean(loss_traj, axis=0)
+                # Insert into plot
+                ax.plot(eps_weights, mean_error_traj, label=labels[i], linewidth=1)
+                ax.fill_between(eps_weights, mean_error_traj - conf_interval, mean_error_traj + conf_interval, alpha=0.2)
+
+            ax.set_xlabel('Epsilon weight')
+            ax.set_ylabel('Test loss')
+            ax.legend()
+            
+            fig.savefig(f'plots/EPS_WEIGHT_SWEEP_{model_name_}.pdf', bbox_inches='tight')
+                
+                
+
+                            
+             
         
 
 
@@ -333,7 +436,7 @@ if __name__ == '__main__':
     parser.add_argument('--plot',
                         help= 'Plotting mode',
                         type=str,
-                        choices=['reconstructions', 'loss', 'separated_losses', 'latent_dims_sweep', 'latent_distributions', 'test_loss_report'],
+                        choices=['reconstructions', 'loss', 'separated_losses', 'latent_dims_sweep', 'latent_distributions', 'test_loss_report', 'eps_weight_sweep'],
                         nargs='+'
     )
     parser.add_argument('--save_model',
@@ -359,12 +462,12 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', 
                         help= 'Batch size for training', 
                         type=int, 
-                        default=16
+                        default=64
     )
     parser.add_argument('--epochs',
                         help= 'Number of epochs for training', 
                         type=int, 
-                        default=15
+                        default=25
     )
     parser.add_argument('--datapath', 
                         type=str, 

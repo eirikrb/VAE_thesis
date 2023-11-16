@@ -22,7 +22,6 @@ class BaseEncoder(nn.Module):
         # Thus, std = exp(log(var)/2) = exp(log(std²)/2) = exp(0.5*log(var))
         std = torch.exp(0.5*log_var)
         epsilon = torch.distributions.Normal(0, eps_weight).sample(mu.shape).to(device) # ~N(0,I)
-        #epsilon = torch.randn_like(std).to(device) # ~N(0,I)
         z = mu + (epsilon * std)
         return z
     
@@ -87,20 +86,9 @@ class Encoder_conv_shallow(BaseEncoder):
             nn.ReLU()
         ) """# dobbeltsjekk om denne delen her skal være som dette!!
 
-
-        # REMOVE RELU BELOW???
         self.fc_mu = nn.Sequential(nn.Linear(len_flat, self.latent_dims), nn.ReLU()) # dobbeltsjekk om denne delen her skal være som dette!!
         self.fc_logvar = nn.Sequential(nn.Linear(len_flat, self.latent_dims), nn.ReLU()) 
-        
-        #self.fc_mu = nn.Linear(len_flat, self.latent_dims)
-        #self.fc_logvar = nn.Linear(len_flat, self.latent_dims)
 
-        """
-        self.N = torch.distributions.Normal(0, 1)
-        self.N.loc = self.N.loc.to(device)
-        self.N.scale = self.N.scale.to(device)
-        self.kl = 0
-        """
     def forward(self, x):
         x = x.to(device)
         x = self.encoder_layer1(x)
@@ -163,7 +151,6 @@ class Encoder_conv_deep(BaseEncoder):
         
         len_flat = 12 # bc. of combination of input dim, kernel, stride and padding. TODO: Automate.
 
-        # REMOVE RELU BELOW???
         self.fc_mu = nn.Sequential(nn.Linear(len_flat, self.latent_dims), nn.ReLU()) 
         self.fc_logvar = nn.Sequential(nn.Linear(len_flat, self.latent_dims), nn.ReLU())
 

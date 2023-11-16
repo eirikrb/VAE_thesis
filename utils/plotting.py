@@ -234,7 +234,7 @@ def plot_separated_losses(total_losses:list, BCE_losses:list, KL_losses:list, la
     if save:
         fig.savefig(f'plots/LOSS_SEPARATED_{model_name}.pdf', bbox_inches='tight')
 
-def plot_test_error_as_function_of(test_errors:np.ndarray, variable, variable_name, save, model_name):
+def plot_test_error_as_function_of(test_errors:np.ndarray, variable, variable_name, save, model_name): # Not in use
     """
     Plots test error as function of variable
     test_errors must be a np.ndarray: variables x seeds

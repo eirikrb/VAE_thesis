@@ -1,5 +1,6 @@
 # Repo specific
 plots/
+tests/
 models/
 
 # Jupyter Notebook

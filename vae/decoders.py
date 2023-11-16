@@ -7,7 +7,7 @@ from abc import abstractmethod
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 class BaseDecoder(nn.Module):
-    """Base class for decoder"""
+    """Base class for convolutional decoder"""
     def __init__(self, latent_dims:int=12, n_sensors:int=180) -> None:
         super(BaseDecoder, self).__init__()
         self.latent_dims = latent_dims
@@ -92,74 +92,6 @@ class Decoder_conv_shallow(BaseDecoder):
         x_hat = self.decoder_layer1(z)
         return x_hat
 
-
-'''
-class Decoder_circular_conv_shallow(BaseDecoder):
-    """
-    Shallow convolutional decoder
-    One convolutional layer and one fully connected layer
-    Circular padding (https://www.tu-chemnitz.de/etit/proaut/publications/schubert19_IV.pdf chapter III section B)
-    """
-    def __init__(self, 
-                 latent_dims:int=12,
-                 n_sensors:int=180, 
-                 kernel_overlap = 0.25):  
-        super().__init__()
-        self.latent_dims = latent_dims
-        self.in_channels = 1 
-        self.out_channels = 1
-        self.kernel_size = round(n_sensors * kernel_overlap)  # 45
-        self.kernel_size = self.kernel_size + 1 if self.kernel_size % 2 == 0 else self.kernel_size  # Make it odd sized
-        # self.padding = (self.kernel_size - 1) // 2  # 22
-        self.padding = self.kernel_size // 3  # 15
-        self.stride = self.padding
-
-        len_flat = 12 # bc. of combination of input dim, kernel, stride and padding. TODO: Automate.
-
-        self.linear = nn.Sequential(
-            nn.Linear(self.latent_dims, len_flat), 
-            nn.ReLU()
-        )
-
-        # No nn.sequentioal bc. of circular padding in between layers
-        self.deconv_block = nn.ConvTranspose1d(
-            in_channels=self.in_channels, 
-            out_channels=self.out_channels,
-            kernel_size=self.kernel_size,
-            stride=self.stride,
-            #padding=self.padding,
-            #output_padding=1,
-        )
-
-        self.sigmoid = nn.Sigmoid()
-
-
-    def circular_tconv_1d(self, z:torch.Tensor, kernel_size:int, stride:int):
-        """ 
-        Following pseudocode from https://www.tu-chemnitz.de/etit/proaut/publications/schubert19_IV.pdf chapter III section B
-        Doesnt work super-well
-        """ 
-        # 1: Run transposed conv without padding
-        z_t_conv = self.deconv_block(z) # Output shape: (width*stride + p_w), where p_w = max(0, k_w - stride)
-        # 2: add the first pw left columns to the last pw right columns, and add the last pw right columns to the first pw left columns
-        pad_width = int(max(0, self.kernel_size - self.stride))
-        # Right side
-        z_t_conv[:, :, -pad_width:] += z_t_conv[:, :, :pad_width]
-        # Left side
-        z_t_conv[:, :, :pad_width] += z_t_conv[:, :, -pad_width:]
-        # 3: Remove the first pw/2 left columns and the last pw/2 right columns
-        crop = pad_width // 2
-        
-        return z_t_conv[:, :, crop : -crop]
-
-    def forward(self, z):
-        z = self.linear(z)
-        # Run transposed circular deconv (shallow)
-        z_t_conv = self.circular_tconv_1d(z, self.kernel_size, self.stride)
-        x_hat = self.sigmoid(z_t_conv)
-        return x_hat
-        
-'''
 
 class Decoder_circular_conv_shallow2(BaseDecoder):
     """

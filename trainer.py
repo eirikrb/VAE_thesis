@@ -31,7 +31,7 @@ class Trainer():
 
     def reconstruction_loss_weights(self, x, k): # Not in use as per now. Idea: Scales losses by how close obstacle is to vehicle, i.e. how close values in the observation are to 1 (collision)
         ones = torch.ones_like(x)
-        closeness_to_one = ones/(ones + torch.exp(-5*(x-0.5))) # sigmoid function approx on interval [0,1]
+        closeness_to_one = ones/(ones + torch.exp(-5*(x-0.5))) # sigmoid function on interval [0,1]. -5 sets the steepness of the curve.
         scaling = k * closeness_to_one # scaling of the non-linear closeness
         return scaling 
 
@@ -114,7 +114,12 @@ class Trainer():
 
 
 
+# TODO: Implement trainer with infoVAE loss
 
+
+
+
+###########################################################################################################
 class Trainer_old():
     """Trainer class for training VAE models"""
     def __init__(self,

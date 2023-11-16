@@ -13,19 +13,27 @@ class Tester():
         self.model = model
         self.dataloader_test = dataloader_test
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        self.trainer = trainer # to get access to loss function
+        self.trainer = trainer # for accessing the same loss function used for training
     
     def test(self) -> float:
+        """Test self.model on the full self.dataloader_test and returns the average loss"""
         test_error = 0.0
+        bce_test_error = 0.0
+        kl_test_error = 0.0
         for x_batch in self.dataloader_test:
             x_batch = x_batch.to(self.device)
             x_hat, mu, log_var = self.model(x_batch)
-            loss, _, _ = self.trainer.loss_function(x_hat, x_batch, mu, log_var, beta=self.trainer.beta, N=1, M=1)#, N=len(self.trainer.dataloader_train.dataset), M=len(self.trainer.dataloader_train.dataset)/self.trainer.batch_size)    
+            loss, bce_loss, kl_loss = self.trainer.loss_function(x_hat, x_batch, mu, log_var, beta=self.trainer.beta, N=1, M=1)#, N=len(self.trainer.dataloader_train.dataset), M=len(self.trainer.dataloader_train.dataset)/self.trainer.batch_size)    
             test_error += loss.item()
+            bce_test_error += bce_loss.item()
+            kl_test_error += kl_loss.item()
         avg_test_error = test_error/len(self.dataloader_test.dataset)
-        return avg_test_error
+        avg_test_bce_error = bce_test_error/len(self.dataloader_test.dataset)
+        avg_test_kl_loss = kl_test_error/len(self.dataloader_test.dataset)
+        return avg_test_error, avg_test_bce_error, avg_test_kl_loss
     
     def report_test_stats(self, test_losses:np.ndarray, model_name:str, metadata:str) -> None:
+        """Writes test statistics to file for n test losses across seeds"""
         mean = np.mean(test_losses)
         std = np.std(test_losses)
         ci = 1.96 * std / np.sqrt(len(test_losses))
