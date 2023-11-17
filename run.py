@@ -28,7 +28,7 @@ def main(args):
     LEARNING_RATE = args.learning_rate  # Default: 0.001
     NUM_SEEDS = args.num_seeds          # Default: 1
     BETA = args.beta                    # Default: 1
-    EPS_WEIGHT = 1                      # Default: 1
+    EPS_WEIGHT = args.eps_weight        # Default: 1
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -239,7 +239,8 @@ def main(args):
                                     batch_size=BATCH_SIZE,
                                     dataloader_train=dataloader_train,
                                     dataloader_val=dataloader_val,
-                                    optimizer=optimizer)
+                                    optimizer=optimizer,
+                                    beta=BETA)
                     trainer.train()
 
                     total_val_losses[i,:] = trainer.validation_loss['Total loss']
@@ -311,7 +312,8 @@ def main(args):
                                     batch_size=BATCH_SIZE,
                                     dataloader_train=dataloader_train,
                                     dataloader_val=dataloader_val,
-                                    optimizer=optimizer)
+                                    optimizer=optimizer,
+                                    beta=BETA)
                     trainer.train()
                     
                     # Get test error 
@@ -374,6 +376,59 @@ def main(args):
             ax.legend()
             
             fig.savefig(f'plots/EPS_WEIGHT_SWEEP_{model_name_}.pdf', bbox_inches='tight')
+        
+        
+        if "latent_dist_kde" in args.plot:
+            betas = [0, 0.2, 0.5, 1, 2, 5, 10]
+            latent_dims_kde = 2
+            _, _, _, dataloader_train, dataloader_val, dataloader_test  = load_LiDARDataset(datapath,  
+                                                                                                mode='max', 
+                                                                                                batch_size=BATCH_SIZE, 
+                                                                                                train_test_split=0.7,
+                                                                                                train_val_split=0.3,
+                                                                                                shuffle=True,
+                                                                                                extend_dataset_roll=True,
+                                                                                                roll_degrees=rolling_degrees,
+                                                                                                add_noise_to_train=True)
+            
+            for b in betas:
+                print(f"Training with beta = {b}")
+                # Create Variational Autoencoder(s)
+                encoder1 = Encoder_conv_shallow(latent_dims=latent_dims_kde, eps_weight=EPS_WEIGHT)
+                decoder1 = Decoder_circular_conv_shallow2(latent_dims=latent_dims_kde)
+                encoder2 = Encoder_conv_deep(latent_dims=latent_dims_kde, eps_weight=EPS_WEIGHT)
+                decoder2 = Decoder_circular_conv_deep(latent_dims=latent_dims_kde)
+
+                vae1 = VAE(encoder=encoder1, decoder=decoder1, latent_dims=latent_dims_kde).to(device)
+                optimizer1 = Adam(vae1.parameters(), lr=LEARNING_RATE)
+                vae2 = VAE(encoder=encoder2, decoder=decoder2, latent_dims=latent_dims_kde).to(device)
+                optimizer2 = Adam(vae2.parameters(), lr=LEARNING_RATE)
+                
+                trainer1 = Trainer(model=vae1, 
+                                epochs=N_EPOCH,
+                                learning_rate=LEARNING_RATE,
+                                batch_size=BATCH_SIZE,
+                                dataloader_train=dataloader_train,
+                                dataloader_val=dataloader_val,
+                                optimizer=optimizer1,
+                                beta=b)
+                trainer1.train()
+                trainer2 = Trainer(model=vae2, 
+                                epochs=N_EPOCH,
+                                learning_rate=LEARNING_RATE,
+                                batch_size=BATCH_SIZE,
+                                dataloader_train=dataloader_train,
+                                dataloader_val=dataloader_val,
+                                optimizer=optimizer2,
+                                beta=b)
+                trainer2.train()
+                
+                # Run on whole test set to obtain kde of latent space
+                latent_space_kde(model=vae1, dataloader=dataloader_test, name=f'latent_kde_beta_{b}_shallow', save=True)
+                latent_space_kde(model=vae2, dataloader=dataloader_test, name=f'latent_kde_beta_{b}_deep', save=True)
+
+                
+                del trainer1, vae1, encoder1, decoder1, optimizer1, trainer2, vae2, encoder2, decoder2, optimizer2
                 
                 
 
@@ -436,7 +491,7 @@ if __name__ == '__main__':
     parser.add_argument('--plot',
                         help= 'Plotting mode',
                         type=str,
-                        choices=['reconstructions', 'loss', 'separated_losses', 'latent_dims_sweep', 'latent_distributions', 'test_loss_report', 'eps_weight_sweep'],
+                        choices=['reconstructions', 'loss', 'separated_losses', 'latent_dims_sweep', 'latent_distributions', 'test_loss_report', 'eps_weight_sweep', 'latent_dist_kde'],
                         nargs='+'
     )
     parser.add_argument('--save_model',
@@ -482,6 +537,11 @@ if __name__ == '__main__':
                         help= 'Number of latent dimensions', 
                         type=int, 
                         default=12
+    )
+    parser.add_argument('--eps_weight',
+                        help= 'Weight of noise in loss function', 
+                        type=float, 
+                        default=1
     )
 
 

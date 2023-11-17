@@ -132,6 +132,36 @@ def plot_latent_distributions(model:nn.Module, dataloader:torch.utils.data.DataL
         if i > num_examples:
             break
 
+def latent_space_kde(model:nn.Module, dataloader:torch.utils.data.DataLoader, name:str, save=True):
+    """Run test set through encoder of vae and plot kde in 2D of latent distributions. Assumes latent dim of model is 2"""
+    zs = np.zeros((1,2))
+    for i, x_batch in enumerate(dataloader):
+        # Get latent representation
+        _, _, z = model.encoder(x_batch) # z is assumed 2D
+        z = z.detach().numpy()[0,:,:]
+        if i == 0:
+            zs = z
+        else:
+            zs = np.vstack((zs, z))
+    
+    # create kde plot
+    plt.style.use('ggplot')
+    plt.rc('font', family='serif')
+    plt.rc('xtick', labelsize=12)
+    plt.rc('ytick', labelsize=12)
+    plt.rc('axes', labelsize=12)
+    sns.kdeplot(x=zs[:,0], y=zs[:,1], fill=True, levels=20)
+    plt.xlabel('z1')
+    plt.ylabel('z2')
+    ax = plt.gca()
+    ax.set_box_aspect(1)
+    #ax.set_aspect('equal', adjustable='box')
+    #ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+    plt.savefig(f'plots/{name}.pdf', bbox_inches='tight')
+    plt.clf()
+    plt.cla()
+        
+        
 
 def plot_loss_multiple_seeds(loss_trajectories:list, labels:list, model_name:str, save=False) -> None:
     """
